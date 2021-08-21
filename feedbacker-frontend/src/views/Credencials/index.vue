@@ -21,18 +21,29 @@
         Essa aqui é a sua chave de api
       </p>
 
+      <content-loader
+        v-if="store.Global.isLoading || state.isLoading"
+        class="rounded"
+        width="600px"
+        height="50px"
+      />
+
       <div
-        class="flex py-3 pl-5 mt-2 rounded items-center bg-brand-gray w-1/2"
+        v-else
+        class="flex py-3 pl-5 mt-2 rounded justify-between items-center bg-brand-gray w-full lg:w-1/2"
       >
-        <span>{{ store.User.currentUser.apiKey }}</span>
-        <div class="flex ml-20 mr-1">
+        <span v-if="state.hasError">Erro ao carregar a apikey</span>
+        <span v-else>{{ store.User.currentUser.apiKey }}</span>
+        <div class="flex ml-20 mr-5" v-if="!state.hasError">
           <icon
+            @click="handleCopy"
             name="Copy"
             :color="brandColors.graydark"
             size="24"
             class="cursor-pointer"
           />
           <icon
+            @click="handleGenerateApiKey"
             name="Loading"
             :color="brandColors.graydark"
             size="24"
@@ -45,10 +56,19 @@
         Coloque esse script abaixo no seu site para começar a receber feedbacks
       </p>
 
+      <content-loader
+        v-if="store.Global.isLoading || state.isLoading"
+        class="rounded"
+        width="600px"
+        height="50px"
+      />
+
       <div
-        class="py-3 pl-5 pr-20 mt-5 rounded bg-brand-gray w-2/3 overflow-x-scroll"
+        v-else
+        class="py-3 pl-5 pr-20 mt-5 rounded bg-brand-gray w-full lg:w-2/3 overflow-x-scroll"
       >
-        <pre>&lt;script src="https://nicollasfeitosa-feedbacker-widget.netlify.app?apiKey={{ store.User.currentUser.apiKey }}"&gt;&lt;/script&gt;</pre>
+        <span v-if="state.hasError">Erro ao carregar o script</span>
+        <pre v-else>&lt;script src="https://nicollasfeitosa-feedbacker-widget.netlify.app?apiKey={{ store.User.currentUser.apiKey }}"&gt;&lt;/script&gt;</pre>
       </div>
 
     </div>
@@ -58,17 +78,66 @@
 
 <script>
 import HeaderLogged from '../../components/HeaderLogged'
+import ContentLoader from '../../components/ContentLoader'
 import Icon from '../../components/Icon'
 import useStore from '../../hooks/useStore'
 import palette from '../../../palette.js'
+import { reactive } from '@vue/reactivity'
+import services from '../../services'
+import { setApiKey } from '../../store/user'
+import { watch } from '@vue/runtime-core'
+import { useToast } from 'vue-toastification'
 
 export default {
-  components: { HeaderLogged, Icon },
+  components: { ContentLoader, HeaderLogged, Icon },
   setup () {
     const store = useStore()
+    const toast = useToast()
+    const state = reactive({
+      hasError: false,
+      isLoading: false
+    })
+
+    watch(() => store.User.currentUser, () => {
+      if (!store.Global.isLoading && !store.User.currentUser.apiKey) {
+        handleError(true)
+      }
+    })
+
+    function handleError (error) {
+      state.isLoading = false
+      state.hasError = !!error
+      toast.error('Erro inesperado aconteceu =/')
+    }
+
+    async function handleGenerateApiKey () {
+      try {
+        state.isLoading = true
+        const { data } = await services.users.generateApiKey()
+
+        setApiKey(data.apiKey)
+        state.isLoading = false
+        toast.success('Chave gerada com successo!')
+      } catch (error) {
+        handleError(error)
+      }
+    }
+
+    async function handleCopy () {
+      toast.clear()
+      try {
+        await navigator.clipboard.writeText(store.User.currentUser.apiKey)
+        toast.success('Copiado!')
+      } catch (error) {
+        handleError(error)
+      }
+    }
 
     return {
+      state,
       store,
+      handleGenerateApiKey,
+      handleCopy,
       brandColors: palette.brand
     }
   }
